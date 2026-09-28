@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cube Engine Scanner</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #0d0f12; color: #f4f5f7; }
+    main { width: min(1180px, 100%); margin: auto; padding: 24px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+    h1 { margin: 0; font-size: clamp(1.4rem, 4vw, 2.1rem); font-weight: 650; }
+    #status { color: #a7adb7; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.2fr) 360px; gap: 20px; margin-top: 18px; align-items: start; }
+    .stage, .panel, .net-card { background: #15181d; border: 1px solid #282d35; border-radius: 16px; }
+    .stage { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+    .panel { min-width: 0; }
+    .viewport { position: relative; width: 100%; aspect-ratio: 16 / 10; min-height: 240px; background: #101318; overflow: hidden; }
+    .coach { flex: none; }
+    video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #overlay { pointer-events: none; }
+    .coach { padding: 16px 18px 18px; border-top: 1px solid #282d35; background: #12151a; }
+    .kicker { margin: 0 0 4px; color: #9ec1ff; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+    .coach h2 { margin: 0 0 6px; font-size: 1.35rem; }
+    .coach p { margin: 0; color: #d5dbe3; line-height: 1.45; }
+    .coach ol { margin: 10px 0 14px; padding-left: 18px; color: #d5dbe3; }
+    .coach li + li { margin-top: 6px; }
+    .bar { height: 6px; margin-top: 12px; border-radius: 99px; background: #2a3038; overflow: hidden; }
+    .bar span { display: block; height: 100%; width: 0; background: #3b82f6; }
+    .panel { padding: 16px; }
+    h2.section { margin: 0 0 10px; font-size: 1rem; }
+    #cube { position: relative; height: 230px; border-radius: 12px; overflow: hidden; background: #0f1115; margin-bottom: 14px; }
+    #cube canvas { display: block; width: 100%; height: 100%; }
+    .steps { display: flex; flex-direction: column; gap: 6px; margin: 0 0 14px; }
+    .steps button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 42px; padding: 0 10px; text-align: left; }
+    .steps button.on { border-color: #8eb6ff; }
+    .steps button.done { color: #d7ffe6; }
+    .swatch { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+    .step-note { margin-left: auto; color: #8b939f; font-size: 12px; }
+    .live { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 168px; }
+    .cell { aspect-ratio: 1; width: 100%; height: auto; min-width: 0; min-height: 0; padding: 0; border-radius: 7px; border: 1px solid #343a45; background: #20242b; cursor: pointer; }
+    .actions, .palette { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    button { min-height: 40px; padding: 0 12px; border: 1px solid #343a45; border-radius: 9px; background: #20242b; color: #f4f5f7; font: inherit; cursor: pointer; }
+    button:hover { background: #292e37; }
+    button:disabled { opacity: .45; cursor: default; }
+    button.primary { background: #2a6fdb; border-color: #3b7ff0; }
+    button.primary:hover { background: #3b7ff0; }
+    .palette button { width: 28px; min-height: 28px; padding: 0; border-radius: 50%; }
+    .hint { color: #a7adb7; font-size: 13px; min-height: 1.2em; margin: 8px 0 0; }
+    pre { overflow-wrap: anywhere; white-space: pre-wrap; margin: 8px 0 0; padding: 12px; background: #0f1115; border-radius: 10px; color: #b9e7ff; font-size: 12px; line-height: 1.5; }
+    .net { display: grid; grid-template-columns: repeat(4, minmax(0, 132px)); gap: 18px 22px; justify-content: center; padding: 8px 16px 18px; }
+    .net > div { min-width: 0; }
+    .face { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; width: 100%; min-width: 0; }
+    .face-label { text-align: center; color: #a7adb7; font-size: 11px; margin-top: 4px; }
+    .net-card { margin-top: 18px; }
+    .net-card h2 { margin: 0; padding: 16px 16px 0; font-size: 1rem; }
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+      .net { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 10px; }
+    }
+  </style>
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
+  </script>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Cube color mapper</h1>
+    <div id="status">Setting up the camera…</div>
+  </header>
+  <div class="layout">
+    <section class="stage" aria-label="Camera">
+      <div class="viewport">
+        <video id="camera" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+      </div>
+      <div class="coach" id="coach"></div>
+    </section>
+    <aside class="panel">
+      <div id="cube"></div>
+      <div class="steps" id="steps"></div>
+      <h2 class="section">This face</h2>
+      <div class="live" id="live"></div>
+      <div class="palette" id="palette"></div>
+      <p class="hint" id="hint">The outline appears when the face is found.</p>
+      <div class="actions">
+        <button class="primary" id="save" disabled>Save now</button>
+        <button id="redo">Redo face</button>
+        <button id="restart">Restart cube</button>
+        <button id="manual">Line it up myself</button>
+      </div>
+      <h2 class="section" style="margin-top:16px">Python CubeState</h2>
+      <pre id="state">The map appears after all six faces.</pre>
+    </aside>
+  </div>
+  <section class="net-card">
+    <h2>Full layout</h2>
+    <div class="net" id="net"></div>
+  </section>
+</main>
+<script type="module">
+const HEX = {white:'#f5f5f5', yellow:'#f4c430', red:'#e53935', orange:'#ff8c32', blue:'#1976d2', green:'#2eaa59'};
+const ORDER = ['U','R','F','D','L','B'];
+const COLOR_TO_FACE = {blue:'U', red:'R', white:'F', green:'D', orange:'L', yellow:'B'};
+const FACE_TO_COLOR = {U:'blue', R:'red', F:'white', D:'green', L:'orange', B:'yellow'};
+const NET = [[null,'U',null,null],['L','F','R','B'],[null,'D',null,null]];
+
+let layout = {faces:{}, steps:[], report:{issues:[]}, state:null};
+let phase = 'intro';
+let stepIndex = 0;
+let liveStickers = [];
+let liveLabs = [];
+let edited = false;
+let selected = null;
+let netPick = null;
+let manual = false;
+let handsOn = false;
+let trackerReady = false;
+let handLandmarker = null;
+let focus = null;
+let handPoints = [];
+let quad = [];
+let locked = false;
+let missCount = 0;
+let stableKey = '';
+let stableCount = 0;
+let captureAfter = 0;
+const CAPTURE_FRAMES = 4;
+let saving = false;
+let analyzing = false;
+let savedFlash = '';
+const video = document.getElementById('camera');
+const overlay = document.getElementById('overlay');
+const crop = document.createElement('canvas');
+
+function step() { return (layout.steps || [])[stepIndex] || null; }
+
+const liveEl = document.getElementById('live');
+for (let i = 0; i < 9; i++) {
+  const cell = document.createElement('button');
+  cell.className = 'cell';
+  cell.addEventListener('click', () => { selected = i; renderLive(); });
+  liveEl.appendChild(cell);
+}
+const stepsEl = document.getElementById('steps');
+const paletteEl = document.getElementById('palette');
+Object.entries(HEX).forEach(([name, hex]) => {
+  const button = document.createElement('button');
+  button.style.background = hex;
+  button.title = name;
+  button.addEventListener('click', () => correct(name));
+  paletteEl.appendChild(button);
+});
+
+const netEl = document.getElementById('net');
+NET.flat().forEach(face => {
+  const wrap = document.createElement('div');
+  if (!face) { wrap.style.visibility = 'hidden'; netEl.appendChild(wrap); return; }
+  const grid = document.createElement('div');
+  grid.className = 'face';
+  grid.dataset.face = face;
+  for (let i = 0; i < 9; i++) {
+    const cell = document.createElement('button');
+    cell.className = 'cell';
+    cell.addEventListener('click', () => correctNet(face, i));
+    grid.appendChild(cell);
+  }
+  wrap.appendChild(grid);
+  const label = document.createElement('div');
+  label.className = 'face-label';
+  label.textContent = FACE_TO_COLOR[face];
+  wrap.appendChild(label);
+  netEl.appendChild(wrap);
+});
+
+function renderSteps() {
+  stepsEl.innerHTML = '';
+  (layout.steps || []).forEach((item, index) => {
+    const button = document.createElement('button');
+    button.classList.toggle('on', phase === 'scan' && index === stepIndex);
+    button.classList.toggle('done', Boolean(layout.faces[item.face]));
+    button.innerHTML = `<i class="swatch" style="background:${HEX[item.color]}"></i><span>${item.color[0].toUpperCase()}${item.color.slice(1)} center</span><span class="step-note">${layout.faces[item.face] ? 'Saved' : index === stepIndex && phase === 'scan' ? 'Now' : ''}</span>`;
+    button.addEventListener('click', () => {
+      stepIndex = index;
+      phase = 'scan';
+      resetReading();
+      render();
+    });
+    stepsEl.appendChild(button);
+  });
+}
+
+function renderLive() {
+  [...liveEl.children].forEach((cell, i) => {
+    const sticker = liveStickers[i];
+    cell.style.background = sticker ? HEX[sticker.color] : '#20242b';
+    cell.style.outline = i === selected ? '2px solid #fff' : '';
+    cell.style.outlineOffset = '-4px';
+  });
+  document.getElementById('save').disabled = phase !== 'scan' || liveStickers.length !== 9 || !locked;
+}
+
+function paintNet() {
+  netEl.querySelectorAll('.face').forEach(grid => {
+    const colors = layout.faces[grid.dataset.face] || [];
+    [...grid.children].forEach((cell, i) => {
+      cell.style.background = colors[i] ? HEX[colors[i]] : '#20242b';
+      const picked = netPick && netPick.face === grid.dataset.face && netPick.index === i;
+      cell.style.outline = picked ? '2px solid #fff' : '';
+    });
+  });
+}
+
+function renderCoach() {
+  const coach = document.getElementById('coach');
+  const current = step();
+  if (phase === 'intro') {
+    coach.innerHTML = `<p class="kicker">How this works</p><h2>Six faces, one at a time.</h2><ol><li>Hold one face toward the camera. It can sit anywhere in the frame.</li><li>Keep the neighboring center up: yellow above blue, white above green, and blue above the four side faces. The scan is not rotated afterward.</li><li>Once the outline stays on the face, that face is captured and the next one starts. Keep one hand on the cube.</li></ol><button class="primary" id="begin">Start with the green center</button>`;
+    document.getElementById('begin').onclick = () => { phase = 'scan'; stepIndex = 0; resetReading(); render(); };
+    return;
+  }
+  if (phase === 'review') {
+    const ok = layout.report?.valid_layout && layout.state;
+    const issues = layout.report?.issues || [];
+    const list = issues.length
+      ? `<ul>${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join('')}</ul>`
+      : '';
+    coach.innerHTML = `<p class="kicker">Review</p><h2>${ok ? 'The cube is mapped.' : 'This scan needs a rescan.'}</h2><p>${ok ? 'Every face is in, and the cubie layout matches a real cube.' : 'The other faces are still saved. Click a face in the step list to rescan just that one.'}</p>${list}`;
+    return;
+  }
+  const progress = Math.min(stableCount / CAPTURE_FRAMES, 1);
+  coach.innerHTML = `<p class="kicker">Step ${stepIndex + 1} of 6${savedFlash ? ' · ' + savedFlash : ''}</p><h2>${current.title}</h2><p>${current.hold} Hold it steady and it saves itself.</p><div class="bar"><span style="width:${progress * 100}%"></span></div>`;
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"]/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'
+  })[character]);
+}
+
+function render() {
+  const state = layout.state;
+  const issues = layout.report?.issues || [];
+  document.getElementById('state').textContent = state ? [
+    `corner_permutation = [${state.corner_permutation.join(', ')}]`,
+    `corner_orientation = [${state.corner_orientation.join(', ')}]`,
+    `edge_permutation = [${state.edge_permutation.join(', ')}]`,
+    `edge_orientation = [${state.edge_orientation.join(', ')}]`,
+    state.valid ? (state.solved ? 'valid · solved' : 'valid') : 'invalid'
+  ].join('\n') : (phase === 'review' && issues.length ? issues.join('\n') : 'The map appears after all six faces.');
+  const current = step();
+  document.getElementById('status').textContent = phase === 'review'
+    ? (layout.report?.valid_layout ? 'Full cube mapped' : 'Review the colors')
+    : phase === 'scan' && current ? `Step ${stepIndex + 1} of 6 · ${current.color}` : 'Ready when you are';
+  document.getElementById('hint').textContent = phase !== 'scan' ? ''
+    : manual ? 'Fit the face in the square, with the center color in the middle.'
+    : locked ? 'Outline locked. Keep the face there and it will capture.'
+    : handsOn ? 'Hand seen. Looking for the cube face in front of it.'
+    : trackerReady ? 'Show a cube face anywhere in the frame.'
+    : 'Show a cube face. Hand tracking is still loading, and the face can still be read.';
+  document.getElementById('manual').textContent = manual ? 'Follow my hand' : 'Line it up myself';
+  renderSteps();
+  renderLive();
+  renderCoach();
+  paintNet();
+  buildCube();
+  aimPreview();
+}
+
+async function correct(color) {
+  if (netPick && layout.faces[netPick.face]) {
+    const response = await fetch('/api/correct', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({face: netPick.face, index: netPick.index, color})
+    });
+    layout = await response.json();
+    if (layout.report?.complete) phase = 'review';
+    render();
+    return;
+  }
+  if (selected == null || !liveStickers[selected]) return;
+  liveStickers[selected] = {...liveStickers[selected], color, face: COLOR_TO_FACE[color]};
+  edited = true;
+  stableCount = 0;
+  renderLive();
+  renderCoach();
+}
+
+function correctNet(face, index) {
+  if (!layout.faces[face]) return;
+  netPick = {face, index};
+  selected = null;
+  paintNet();
+  document.getElementById('hint').textContent = 'Pick a color for that sticker.';
+}
+
+function resetReading() {
+  liveStickers = [];
+  liveLabs = [];
+  edited = false;
+  selected = null;
+  locked = false;
+  quad = [];
+  stableKey = '';
+  stableCount = 0;
+  missCount = 0;
+}
+
+async function commitCurrent() {
+  const current = step();
+  if (!current || saving || liveStickers.length !== 9) return;
+  if (liveStickers[4]?.color !== current.color) return;
+  saving = true;
+  const response = await fetch('/api/commit', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({face: current.face, stickers: liveStickers.map(s => s.color), labs: liveLabs})
+  });
+  layout = await response.json();
+  savedFlash = `${current.color[0].toUpperCase()}${current.color.slice(1)} saved`;
+  const next = (layout.steps || []).findIndex(item => !layout.faces[item.face]);
+  if (next === -1) phase = 'review';
+  else stepIndex = next;
+  resetReading();
+  captureAfter = performance.now() + 900;
+  render();
+  saving = false;
+  setTimeout(() => { savedFlash = ''; if (phase === 'scan') renderCoach(); }, 900);
+}
+
+document.getElementById('save').onclick = () => commitCurrent();
+document.getElementById('redo').onclick = async () => {
+  const current = step();
+  if (!current) return;
+  layout = await (await fetch('/api/clear', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({face: current.face})})).json();
+  phase = 'scan';
+  resetReading();
+  render();
+};
+document.getElementById('restart').onclick = async () => {
+  const response = await fetch('/api/reset', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: '{}'
+  });
+  if (!response.ok) return;
+  layout = await response.json();
+  phase = 'scan';
+  stepIndex = 0;
+  netPick = null;
+  savedFlash = '';
+  aimedFace = '';
+  resetReading();
+  render();
+};
+document.getElementById('manual').onclick = () => { manual = !manual; resetReading(); render(); };
+
+const cubeMount = document.getElementById('cube');
+let THREE = null;
+let scene = null;
+let camera3 = null;
+let renderer = null;
+let controls = null;
+let previewReady = false;
+const cubelets = [];
+const spacing = 1.04;
+const plastic = 0x2a3038;
+function hexNum(name) { return name ? parseInt(HEX[name].slice(1), 16) : plastic; }
+function faceColors(face) {
+  const current = step();
+  if (phase === 'scan' && current && current.face === face && liveStickers.length === 9) {
+    return liveStickers.map(sticker => sticker.color);
+  }
+  return layout.faces[face];
+}
+function stickerColor(face, x, y, z) {
+  const colors = faceColors(face);
+  if (!colors) return null;
+  let index;
+  if (face === 'U') index = (z + 1) * 3 + (x + 1);
+  if (face === 'D') index = (1 - z) * 3 + (x + 1);
+  if (face === 'F') index = (1 - y) * 3 + (x + 1);
+  if (face === 'B') index = (1 - y) * 3 + (1 - x);
+  if (face === 'R') index = (1 - y) * 3 + (1 - z);
+  if (face === 'L') index = (1 - y) * 3 + (z + 1);
+  return colors[index];
+}
+let cubeGeometry = null;
+function buildCube() {
+  if (!previewReady) return;
+  cubelets.forEach(mesh => {
+    scene.remove(mesh);
+    mesh.material.forEach(material => material.dispose());
+  });
+  cubelets.length = 0;
+  if (cubeGeometry) cubeGeometry.dispose();
+  cubeGeometry = new THREE.BoxGeometry(.96, .96, .96);
+  const geometry = cubeGeometry;
+  for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+    if (!x && !y && !z) continue;
+    const mesh = new THREE.Mesh(geometry, [
+      new THREE.MeshStandardMaterial({color: hexNum(x === 1 ? stickerColor('R', x, y, z) : null), roughness:.42}),
+      new THREE.MeshStandardMaterial({color: hexNum(x === -1 ? stickerColor('L', x, y, z) : null), roughness:.42}),
+      new THREE.MeshStandardMaterial({color: hexNum(y === 1 ? stickerColor('U', x, y, z) : null), roughness:.42}),
+      new THREE.MeshStandardMaterial({color: hexNum(y === -1 ? stickerColor('D', x, y, z) : null), roughness:.42}),
+      new THREE.MeshStandardMaterial({color: hexNum(z === 1 ? stickerColor('F', x, y, z) : null), roughness:.42}),
+      new THREE.MeshStandardMaterial({color: hexNum(z === -1 ? stickerColor('B', x, y, z) : null), roughness:.42})
+    ]);
+    mesh.position.set(x * spacing, y * spacing, z * spacing);
+    scene.add(mesh);
+    cubelets.push(mesh);
+  }
+}
+const PREVIEW = {
+  iso: [4.8, 4.1, 5.6],
+  U: [0.5, 6.5, 1.1],
+  D: [0.5, -6.5, 1.1],
+  F: [0.7, 1.5, 6.5],
+  B: [-0.7, 1.5, -6.5],
+  R: [6.5, 1.5, 0.7],
+  L: [-6.5, 1.5, -0.7]
+};
+let aimedFace = '';
+function aimPreview() {
+  if (!previewReady) return;
+  const current = step();
+  const face = phase === 'scan' && current ? current.face : 'iso';
+  if (face === aimedFace) return;
+  aimedFace = face;
+  const [x, y, z] = PREVIEW[face] || PREVIEW.iso;
+  camera3.position.set(x, y, z);
+  controls.target.set(0, 0, 0);
+  controls.update();
+}
+function resizeCube() {
+  const w = Math.max(1, cubeMount.clientWidth);
+  const h = Math.max(1, cubeMount.clientHeight);
+  renderer.setSize(w, h, true);
+  camera3.aspect = w / h;
+  camera3.updateProjectionMatrix();
+  controls.target.set(0, 0, 0);
+  controls.update();
+}
+function tick() {
+  if (!previewReady) return;
+  controls.update();
+  renderer.render(scene, camera3);
+  requestAnimationFrame(tick);
+}
+async function startPreview() {
+  try {
+    THREE = await import('three');
+    const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+    scene = new THREE.Scene();
+    camera3 = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+    camera3.position.set(4.8, 4.1, 5.6);
+    renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    cubeMount.appendChild(renderer.domElement);
+    controls = new OrbitControls(camera3, renderer.domElement);
+    controls.enableDamping = true;
+    controls.enablePan = false;
+    controls.minPolarAngle = 0;
+    controls.maxPolarAngle = Math.PI;
+    controls.minDistance = 5;
+    controls.maxDistance = 12;
+    controls.target.set(0, 0, 0);
+    camera3.lookAt(0, 0, 0);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x2a3140, 2.2));
+    const key = new THREE.DirectionalLight(0xffffff, 2.6);
+    key.position.set(5, 8, 7);
+    scene.add(key);
+    previewReady = true;
+    new ResizeObserver(resizeCube).observe(cubeMount);
+    resizeCube();
+    buildCube();
+    aimPreview();
+    tick();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function coverMap() {
+  const ew = overlay.clientWidth, eh = overlay.clientHeight;
+  const vw = video.videoWidth || ew, vh = video.videoHeight || eh;
+  const scale = Math.max(ew / vw, eh / vh);
+  return {scale, ox: (ew - vw * scale) / 2, oy: (eh - vh * scale) / 2, vw, vh};
+}
+function videoNormToCanvas(nx, ny) {
+  const {scale, ox, oy, vw, vh} = coverMap();
+  return [ox + nx * vw * scale, oy + ny * vh * scale];
+}
+function canvasToVideoNorm(x, y) {
+  const {scale, ox, oy, vw, vh} = coverMap();
+  return [(x - ox) / (vw * scale), (y - oy) / (vh * scale)];
+}
+
+function drawOverlay() {
+  const dpr = devicePixelRatio || 1;
+  const w = overlay.width = overlay.clientWidth * dpr;
+  const h = overlay.height = overlay.clientHeight * dpr;
+  const ctx = overlay.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
+  if (phase === 'intro') return;
+  if (manual) {
+    const side = Math.min(overlay.clientWidth, overlay.clientHeight) * 0.68;
+    const x = (overlay.clientWidth - side) / 2;
+    const y = (overlay.clientHeight - side) / 2;
+    ctx.strokeStyle = 'rgba(244,245,247,.9)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, side, side);
+    ctx.beginPath();
+    for (let i = 1; i < 3; i++) {
+      ctx.moveTo(x + side * i / 3, y); ctx.lineTo(x + side * i / 3, y + side);
+      ctx.moveTo(x, y + side * i / 3); ctx.lineTo(x + side, y + side * i / 3);
+    }
+    ctx.strokeStyle = 'rgba(244,245,247,.35)';
+    ctx.stroke();
+    return;
+  }
+  handPoints.forEach(hand => {
+    hand.forEach(point => {
+      const [x, y] = videoNormToCanvas(point.x, point.y);
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(158,193,255,.9)';
+      ctx.fill();
+    });
+  });
+  if (!quad.length) {
+    const side = Math.min(overlay.clientWidth, overlay.clientHeight) * 0.42;
+    const x = (overlay.clientWidth - side) / 2;
+    const y = (overlay.clientHeight - side) / 2;
+    ctx.strokeStyle = 'rgba(244,245,247,.28)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, side, side);
+    return;
+  }
+  if (quad.length === 4) {
+    const points = quad.map(([x, y]) => videoNormToCanvas(x, y));
+    ctx.beginPath();
+    points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.closePath();
+    ctx.strokeStyle = locked ? '#7dffa8' : 'rgba(255,255,255,.7)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.setLineDash([5, 6]);
+    for (let i = 1; i < 3; i++) {
+      const a = points[0].map((v, k) => v + (points[3][k] - v) * i / 3);
+      const b = points[1].map((v, k) => v + (points[2][k] - v) * i / 3);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+      const c = points[0].map((v, k) => v + (points[1][k] - v) * i / 3);
+      const d = points[3].map((v, k) => v + (points[2][k] - v) * i / 3);
+      ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+}
+
+function manualRoi() {
+  const side = Math.min(overlay.clientWidth, overlay.clientHeight) * 0.68;
+  const x = (overlay.clientWidth - side) / 2;
+  const y = (overlay.clientHeight - side) / 2;
+  const a = canvasToVideoNorm(x, y);
+  const b = canvasToVideoNorm(x + side, y + side);
+  const nx = Math.max(0, Math.min(a[0], b[0]));
+  const ny = Math.max(0, Math.min(a[1], b[1]));
+  return {x: nx, y: ny, w: Math.min(1 - nx, Math.abs(b[0] - a[0])), h: Math.min(1 - ny, Math.abs(b[1] - a[1]))};
+}
+
+function grabFrame() {
+  if (!video.videoWidth) return null;
+  const ctx = crop.getContext('2d');
+  if (manual) {
+    const box = manualRoi();
+    const sx = box.x * video.videoWidth;
+    const sy = box.y * video.videoHeight;
+    const sw = Math.max(2, box.w * video.videoWidth);
+    const sh = Math.max(2, box.h * video.videoHeight);
+    crop.width = 420;
+    crop.height = Math.max(2, Math.round(420 * sh / sw));
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, crop.width, crop.height);
+  } else {
+    const scale = Math.min(1, 640 / video.videoWidth);
+    crop.width = Math.max(2, Math.round(video.videoWidth * scale));
+    crop.height = Math.max(2, Math.round(video.videoHeight * scale));
+    ctx.drawImage(video, 0, 0, crop.width, crop.height);
+  }
+  return crop.toDataURL('image/jpeg', 0.72);
+}
+
+function applyReading(data) {
+  const current = step();
+  if (!current || phase !== 'scan') return;
+  const found = Boolean(data.locked) && data.stickers?.length === 9;
+  if (!found) {
+    missCount += 1;
+    if (missCount < 3) return;
+    locked = false;
+    quad = [];
+    stableCount = 0;
+    if (!edited) { liveStickers = []; liveLabs = []; }
+    renderLive();
+    renderCoach();
+    buildCube();
+    return;
+  }
+  missCount = 0;
+  locked = true;
+  quad = !manual && data.quad?.length === 4 ? data.quad : [];
+  if (!edited) {
+    liveStickers = data.stickers;
+    liveLabs = data.stickers.map(sticker => sticker.lab);
+  }
+  const center = liveStickers[4]?.color;
+  const cooling = performance.now() < captureAfter;
+  if (cooling || center !== current.color) {
+    stableCount = 0;
+    stableKey = '';
+    document.getElementById('hint').textContent = cooling
+      ? 'Saved. Turn the cube to the next center.'
+      : `That center looks ${center}. ${current.nudge}`;
+  } else {
+    const key = liveStickers.map(sticker => sticker.color).join('');
+    const sameFace = key === stableKey || agreedStickers(key, stableKey) >= 7;
+    stableCount = sameFace ? stableCount + 1 : 1;
+    stableKey = key;
+    document.getElementById('hint').textContent = stableCount >= CAPTURE_FRAMES
+      ? 'In focus. Capturing this face.'
+      : 'Good focus. Hold still — it saves without a click.';
+  }
+  renderLive();
+  renderCoach();
+  buildCube();
+  if (!edited && !cooling && stableCount >= CAPTURE_FRAMES && center === current.color) commitCurrent();
+}
+
+function agreedStickers(left, right) {
+  if (!left || !right || left.length !== right.length) return 0;
+  let same = 0;
+  for (let i = 0; i < left.length; i++) if (left[i] === right[i]) same += 1;
+  return same;
+}
+
+async function analyze() {
+  if (phase !== 'scan' || analyzing || saving) return;
+  const image = grabFrame();
+  if (!image) return;
+  analyzing = true;
+  try {
+    const response = await fetch('/api/analyze', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({image, manual, focus})
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      document.getElementById('hint').textContent = 'The scanner could not read that frame.';
+      return;
+    }
+    applyReading(data);
+  } catch {
+    document.getElementById('hint').textContent = 'The scanner could not read that frame.';
+  } finally { analyzing = false; }
+}
+
+let lastHandTime = 0;
+let lastHandRun = 0;
+function loop(now) {
+  if (handLandmarker && video.readyState >= 2 && !manual && now - lastHandRun > 80) {
+    lastHandRun = now;
+    const timestamp = Math.max(lastHandTime + 1, Math.round(now));
+    try {
+      const result = handLandmarker.detectForVideo(video, timestamp);
+      lastHandTime = timestamp;
+      const hands = result?.landmarks || [];
+      handPoints = hands;
+      handsOn = hands.length > 0;
+      if (handsOn) {
+        let sx = 0, sy = 0, n = 0;
+        hands.forEach(hand => hand.forEach(point => { sx += point.x; sy += point.y; n += 1; }));
+        focus = {x: sx / n, y: sy / n};
+      } else focus = null;
+    } catch { handsOn = false; }
+  } else if (manual) {
+    handPoints = [];
+    handsOn = false;
+    focus = null;
+  }
+  drawOverlay();
+  requestAnimationFrame(loop);
+}
+
+async function openCamera() {
+  const attempts = [
+    {video: {facingMode: {ideal: 'environment'}, width: {ideal: 1280}, height: {ideal: 720}}, audio: false},
+    {video: {facingMode: {ideal: 'user'}, width: {ideal: 1280}, height: {ideal: 720}}, audio: false},
+    {video: true, audio: false}
+  ];
+  let lastError = null;
+  for (const constraints of attempts) {
+    try { return await navigator.mediaDevices.getUserMedia(constraints); }
+    catch (error) { lastError = error; }
+  }
+  throw lastError;
+}
+
+async function startCamera() {
+  try {
+    video.srcObject = await openCamera();
+    await video.play();
+    if (phase === 'intro') document.getElementById('status').textContent = 'Ready when you are';
+    setInterval(analyze, 220);
+    requestAnimationFrame(loop);
+  } catch {
+    document.getElementById('status').textContent = 'Camera blocked — allow access, then refresh.';
+  }
+}
+
+async function startHands() {
+  try {
+    const visionLib = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs');
+    const vision = await visionLib.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm');
+    handLandmarker = await visionLib.HandLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+        delegate: 'CPU'
+      },
+      runningMode: 'VIDEO',
+      numHands: 2
+    });
+    trackerReady = true;
+  } catch {
+    trackerReady = false;
+  }
+  render();
+}
+
+layout = await (await fetch('/api/layout')).json();
+render();
+startCamera();
+startHands();
+startPreview();
+</script>
+</body>
+</html>
