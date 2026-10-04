@@ -1,4 +1,5 @@
 import { useState } from "react";
+import CubeControl from "./CubeControl.jsx";
 import CubePreview from "./CubePreview.jsx";
 import SolveOverlay from "./SolveOverlay.jsx";
 import { CAPTURE_FRAMES, FACE_TO_COLOR, HEX, NET } from "./constants.js";
@@ -227,16 +228,40 @@ function Done({ scan }) {
 
 export default function App() {
   const scan = useScanner();
+  const [mode, setMode] = useState("scanner");
+
   return (
     <main className="screen">
-      <div className={scan.phase === "scan" ? "camera-layer" : "camera-layer idle"}>
-        <video ref={scan.videoRef} autoPlay playsInline muted />
-        <canvas ref={scan.overlayRef} />
-        {scan.phase === "scan" && <CameraHud scan={scan} />}
-      </div>
-      {scan.phase === "prepare" && <Prepare scan={scan} />}
-      {scan.phase === "verify" && <Verify scan={scan} />}
-      {scan.phase === "done" && <Done scan={scan} />}
+      <nav className="app-nav">
+        <button
+          type="button"
+          className={mode === "scanner" ? "nav-active" : ""}
+          onClick={() => setMode("scanner")}
+        >
+          Scanner
+        </button>
+        <button
+          type="button"
+          className={mode === "control" ? "nav-active" : ""}
+          onClick={() => setMode("control")}
+        >
+          Cube Control
+        </button>
+      </nav>
+      {mode === "control" ? (
+        <CubeControl onBack={() => setMode("scanner")} />
+      ) : (
+        <>
+          <div className={scan.phase === "scan" ? "camera-layer" : "camera-layer idle"}>
+            <video ref={scan.videoRef} autoPlay playsInline muted />
+            <canvas ref={scan.overlayRef} />
+            {scan.phase === "scan" && <CameraHud scan={scan} />}
+          </div>
+          {scan.phase === "prepare" && <Prepare scan={scan} />}
+          {scan.phase === "verify" && <Verify scan={scan} />}
+          {scan.phase === "done" && <Done scan={scan} />}
+        </>
+      )}
     </main>
   );
 }

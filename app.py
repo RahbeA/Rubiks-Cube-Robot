@@ -24,6 +24,9 @@ from scanner.detect import (
 from scanner.cubie_convert import colored_faces_to_cube_state
 from scanner.mapper import SCAN_GUIDE, SCAN_STEPS, facelet_string, layout_report
 from scanner.solve_service import run_two_phase_solver, warm_solver_worker
+from cube_control.session import cube_control_session, moves_to_algorithm
+from cube_control.voice import parse_voice_best
+from cube_control import serial_out
 
 HOST = "127.0.0.1"
 PORT = 8000
@@ -184,6 +187,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/layout":
             self.send_json(serialize_faces())
             return
+        if path == "/api/cube-control/state":
+            self.send_json(cube_control_session.serialize())
+            return
+        if path == "/api/cube-control/serial":
+            self.send_json(serial_out.status())
+            return
         if path.startswith("/api/"):
             self.send_error(404)
             return
@@ -207,6 +216,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/analyze":
             try:
                 image = decode_image(data["image"])
+                # The page sends `manual` and `focus`. This handler reads `mode`
+                # and defaults to the centered guide, so those fields are unused.
                 mode = data.get("mode", "guide")
                 if mode not in ("guide", "auto"):
                     mode = "guide"
@@ -275,6 +286,173 @@ class Handler(BaseHTTPRequestHandler):
                 classifier.learn(center, np.array(labs[4], dtype=np.float64))
                 classifier.save(CALIBRATION_PATH)
             self.send_json(serialize_faces())
+            return
+
+        if self.path == "/api/cube-control/reset":
+            cube_control_session.reset()
+            self.send_json(cube_control_session.serialize())
+            return
+
+        if self.path == "/api/cube-control/move":
+            move = data.get("move")
+            moves = data.get("moves")
+            if moves and isinstance(moves, list):
+                try:
+                    cube_control_session.apply_moves(moves)
+                except ValueError as error:
+                    self.send_json({"error": str(error)}, status=400)
+                    return
+                algorithm = moves_to_algorithm(moves)
+            elif isinstance(move, str) and move:
+                try:
+                    cube_control_session.apply_one(move)
+                except ValueError as error:
+                    self.send_json({"error": str(error)}, status=400)
+                    return
+                algorithm = move
+            else:
+                self.send_json({"error": "Provide move or moves."}, status=400)
+                return
+            if data.get("send_serial"):
+                try:
+                    serial_out.send_line(algorithm)
+                except RuntimeError as error:
+                    self.send_json({"error": str(error), **cube_control_session.serialize()}, status=409)
+                    return
+            self.send_json({"algorithm": algorithm, **cube_control_session.serialize()})
+            return
+
+        if self.path == "/api/cube-control/scramble":
+            length = int(data.get("length") or 20)
+            length = max(5, min(length, 40))
+            moves = cube_control_session.scramble(length)
+            algorithm = moves_to_algorithm(moves)
+            if data.get("send_serial", True):
+                try:
+                    serial_out.send_moves(moves)
+                except RuntimeError as error:
+                    self.send_json({"error": str(error), "algorithm": algorithm, **cube_control_session.serialize()}, status=409)
+                    return
+            self.send_json({"moves": moves, "algorithm": algorithm, **cube_control_session.serialize()})
+            return
+
+        if self.path == "/api/cube-control/solve":
+            try:
+                moves = cube_control_session.solve()
+            except ValueError as error:
+                self.send_json({"error": str(error)}, status=400)
+                return
+            algorithm = moves_to_algorithm(moves)
+            if data.get("send_serial", True):
+                try:
+                    serial_out.send_moves(moves)
+                except RuntimeError as error:
+                    self.send_json({"error": str(error), "algorithm": algorithm, **cube_control_session.serialize()}, status=409)
+                    return
+            self.send_json({"moves": moves, "algorithm": algorithm, **cube_control_session.serialize()})
+            return
+
+        if self.path == "/api/cube-control/voice":
+            text = data.get("text") or ""
+            alternatives = data.get("alternatives")
+            if not isinstance(alternatives, list):
+                alternatives = []
+            parsed = parse_voice_best(text, alternatives)
+            if parsed["type"] == "command":
+                command = parsed["command"]
+                if command == "reset":
+                    cube_control_session.reset()
+                    payload = cube_control_session.serialize()
+                    payload["parsed"] = parsed
+                    self.send_json(payload)
+                    return
+                if command == "scramble":
+                    moves = cube_control_session.scramble(int(data.get("length") or 20))
+                    algorithm = moves_to_algorithm(moves)
+                    serial_error = None
+                    if data.get("send_serial", True):
+                        try:
+                            serial_out.send_moves(moves)
+                        except RuntimeError as error:
+                            serial_error = str(error)
+                    payload = {"moves": moves, "algorithm": algorithm, **cube_control_session.serialize(), "parsed": parsed}
+                    if serial_error:
+                        self.send_json({**payload, "error": serial_error}, status=409)
+                        return
+                    self.send_json(payload)
+                    return
+                if command == "solve":
+                    try:
+                        moves = cube_control_session.solve()
+                    except ValueError as error:
+                        self.send_json({"error": str(error), "parsed": parsed}, status=400)
+                        return
+                    algorithm = moves_to_algorithm(moves)
+                    serial_error = None
+                    if data.get("send_serial", True):
+                        try:
+                            serial_out.send_moves(moves)
+                        except RuntimeError as error:
+                            serial_error = str(error)
+                    payload = {"moves": moves, "algorithm": algorithm, **cube_control_session.serialize(), "parsed": parsed}
+                    if serial_error:
+                        self.send_json({**payload, "error": serial_error}, status=409)
+                        return
+                    self.send_json(payload)
+                    return
+            if parsed["type"] == "moves":
+                try:
+                    cube_control_session.apply_moves(parsed["moves"])
+                except ValueError as error:
+                    self.send_json({"error": str(error), "parsed": parsed}, status=400)
+                    return
+                algorithm = moves_to_algorithm(parsed["moves"])
+                if data.get("send_serial", True):
+                    try:
+                        serial_out.send_moves(parsed["moves"])
+                    except RuntimeError as error:
+                        self.send_json({"error": str(error), "parsed": parsed, **cube_control_session.serialize()}, status=409)
+                        return
+                self.send_json({"algorithm": algorithm, "parsed": parsed, **cube_control_session.serialize()})
+                return
+            payload = {"parsed": parsed, **cube_control_session.serialize()}
+            if parsed["type"] == "unknown":
+                payload["error"] = f"Unknown voice command: {parsed.get('text', '')}"
+                self.send_json(payload, status=400)
+                return
+            self.send_json(payload)
+            return
+
+        if self.path == "/api/cube-control/serial/connect":
+            port = data.get("port")
+            if not port:
+                self.send_json({"error": "Missing serial port."}, status=400)
+                return
+            baud = int(data.get("baud") or 115200)
+            try:
+                serial_out.connect(port, baud)
+            except (RuntimeError, OSError, ValueError) as error:
+                self.send_json({"error": str(error)}, status=400)
+                return
+            self.send_json(serial_out.status())
+            return
+
+        if self.path == "/api/cube-control/serial/disconnect":
+            serial_out.disconnect()
+            self.send_json(serial_out.status())
+            return
+
+        if self.path == "/api/cube-control/serial/send":
+            line = data.get("line") or data.get("algorithm")
+            if not line:
+                self.send_json({"error": "Missing line to send."}, status=400)
+                return
+            try:
+                serial_out.send_line(str(line))
+            except RuntimeError as error:
+                self.send_json({"error": str(error)}, status=409)
+                return
+            self.send_json({"ok": True, "sent": str(line)})
             return
 
         if self.path == "/api/solve":

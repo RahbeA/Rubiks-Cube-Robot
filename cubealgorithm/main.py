@@ -1,18 +1,5 @@
-#Implementation of cubstate class with features such as storing CubeState as an object with 4 lists using orientation and permutation of each peice on the cube
-#How this works is each piece is numbered. Edges (0-11) and Corners (0-7)
-#Each move (U, F, B, D, R, L) and their inverses as well as doubles but  only 6 methods for each move was implemented
-#Implemented methods for checking if cubestate is solved and valid
-import random
-from cube_state import CubeState
-import time
-from two_phase_solver import is_phase_1_solved, slice_membership_key, build_slice_membership_database
-import time
+"""Scramble a solved cube and run the experimental two-phase solver."""
 
-from cube_state import CubeState
-from solver import (
-    solve_two_phase,
-    phase_1_ida_star
-)
 import random
 import threading
 import time
@@ -54,8 +41,6 @@ def display_progress(stop_event, start_time):
         )
 
         spinner_index = (spinner_index + 1) % len(spinner)
-
-        # Wait 0.1 seconds, unless the solver finishes first.
         stop_event.wait(0.1)
 
 
@@ -83,8 +68,6 @@ finally:
     progress_thread.join()
 
 elapsed = time.time() - start_time
-
-# Clear the progress line.
 print("\r" + " " * 60, end="\r")
 
 print("Search finished.")

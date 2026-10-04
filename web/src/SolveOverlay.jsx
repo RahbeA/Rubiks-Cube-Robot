@@ -38,12 +38,10 @@ export default function SolveOverlay({ searching, solution, error, onClose }) {
             <p className="kicker">Solving</p>
             <h2 id="solve-title">Mapping your cube…</h2>
             <p className="solve-lead">
-            Your two-phase solver is running ({elapsed}s). Scanned cubes use the fast facelet solver when available.
+              Solving the scanned cube ({elapsed}s). Kociemba runs when it is installed.
+              Otherwise the experimental two-phase solver runs, and that search can take much longer.
+              This timer is computer time, not robot motion time.
             </p>
-            <div className="robot-callout">
-              <strong>Robot ready</strong>
-              <span>Place the cube in the grip now so you are ready when the moves appear.</span>
-            </div>
           </>
         )}
 
@@ -54,8 +52,8 @@ export default function SolveOverlay({ searching, solution, error, onClose }) {
             <p className="solve-meta">{solution.length} moves</p>
             <pre className="solve-moves">{formatMoves(solution)}</pre>
             <div className="robot-callout">
-              <strong>Load the cube into the robot</strong>
-              <span>Keep placing the cube in the robot. The move list above is what it will follow.</span>
+              <strong>Move list only</strong>
+              <span>This screen does not send the solution to the Arduino. Cube Control does that.</span>
             </div>
             <button type="button" className="primary" onClick={onClose}>Back to layout</button>
           </>

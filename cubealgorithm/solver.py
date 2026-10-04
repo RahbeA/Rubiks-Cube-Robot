@@ -21,7 +21,7 @@ from two_phase_solver import (
     build_slice_permutation_database,
     phase_1_slice_distance,
 )
-from search_state import SearchState, from_cube_state
+from search_state import from_cube_state
 
 
 # Edge groups must exist before any database uses them.

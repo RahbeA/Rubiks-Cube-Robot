@@ -1,8 +1,7 @@
-"""Color classification in CIE Lab using CIEDE2000.
+"""Classify sticker colors in CIE Lab with CIEDE2000.
 
-The distance formula follows Sharma, Wu, and Dalal (2005). Open-source
-webcam solvers such as QBR showed that Lab + ΔE00 is far more stable
-under room lighting than HSV ranges, which is why this scanner uses it.
+Distance uses the CIEDE2000 formula (Sharma, Wu, and Dalal, 2005).
+Reference colors start from indoor BGR defaults and update from captured centers.
 """
 
 from __future__ import annotations

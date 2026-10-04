@@ -1,7 +1,9 @@
 .venv/
 web/node_modules/
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.DS_Store
+web/dist/
 data/calibration.json
 data/debug/
-.DS_Store

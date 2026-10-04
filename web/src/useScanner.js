@@ -44,7 +44,6 @@ export function useScanner() {
     trackerReady: false,
     locked: false,
     stableCount: 0,
-    savedFlash: "",
     hint: "",
     cameraStatus: "Setting up the camera…",
   });
@@ -105,7 +104,6 @@ export function useScanner() {
         selected: null,
         netPick: null,
         hint: "",
-        savedFlash: "",
         ...clearedReading(),
       });
       captureAfterRef.current = performance.now() + 900;
@@ -423,7 +421,7 @@ export function useScanner() {
     videoRef.current?.play?.();
     const cleared = clearedReading();
     const next = { ...uiRef.current, layout: data, phase: "scan", stepIndex: 0, ...cleared };
-    patch({ layout: data, phase: "scan", stepIndex: 0, savedFlash: "", netPick: null, ...cleared, hint: scanHint(next) });
+    patch({ layout: data, phase: "scan", stepIndex: 0, netPick: null, ...cleared, hint: scanHint(next) });
   }, [clearedReading, patch]);
 
   const continueFace = useCallback(() => {
@@ -516,7 +514,6 @@ export function useScanner() {
       phase: "prepare",
       stepIndex: 0,
       netPick: null,
-      savedFlash: "",
       ...clearedReading(),
       hint: "",
     });

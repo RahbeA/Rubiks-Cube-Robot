@@ -1,0 +1,10 @@
+ALL_MOVES = [
+    "R", "R'", "R2",
+    "L", "L'", "L2",
+    "D", "D'", "D2",
+    "B", "B'", "B2",
+    "F", "F'", "F2",
+    "U", "U'", "U2",
+]
+
+FACE_MOVES = {move[0] for move in ALL_MOVES}

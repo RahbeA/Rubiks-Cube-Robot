@@ -231,9 +231,7 @@ def build_phase_2_edge_permutation_database(
     )
 
 
-# --------------------------------------------------
-# DATABASE TESTS
-# --------------------------------------------------
+# Print database sizes when this file is run directly.
 
 if __name__ == "__main__":
     print("Building Phase 1 databases...")
